@@ -1,0 +1,200 @@
+version: 3
+
+vars:
+  PROJECT_NAME: "app-template"
+  DEV_ENV_PATH: "build/configs/envs/.env.dev"
+  DEV_DC_PATH: "compose-dev.yaml"
+
+  PROD_ENV_PATH: "build/configs/envs/.env.prod"
+  PROD_DC_PATH: "compose.yaml"
+
+  K6_ENV_PATH: "build/configs/envs/.env.k6"
+  K6_DC_PATH: "compose-k6.yaml"
+
+
+tasks:
+  # LOCAL
+  run:
+    desc: Run app
+    cmds:
+      - "go run cmd/main.go"
+
+  build:
+    desc: Build app
+    cmds:
+      - "go build -o bin/main cmd/main.go"
+  # END
+
+  # UTILS
+  pre:
+    desc: Run pre-commit tasks
+    cmds:
+      - "task doc"
+      - "task pb"
+      - "task mocks"
+      - "task fmt"
+      - "task lint"
+      - "task t"
+
+  doc:
+    desc: Generate docs
+    cmds:
+      - "swag fmt"
+      - "swag init -g ./cmd/main.go -o ./api/rest/v1 --parseDependency  --parseInternal"
+
+  lint:
+    desc: Lint app
+    cmds:
+      - "golangci-lint run"
+
+  lint-fix:
+    desc: Lint app
+    cmds:
+      - "golangci-lint run --fix"
+
+  fmt:
+    desc: Format app
+    cmds:
+      - "golangci-lint fmt"
+
+  pb:
+    desc: Gen Proto file
+    cmds:
+      - "protoc --go_out=. --go-grpc_out=. --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative api/grpc/v1/gen/app.proto"
+
+  mocks:
+    desc: Generate mocks
+    cmds:
+      - 'mockgen -source="./internal/ctrl/ctrl.go" -destination="tests/mocks/mock_ctrl.go" -package=mocks'
+      - 'mockgen -source="./internal/auth/auth.go" -destination="tests/mocks/mock_auth.go" -package=mocks'
+  # END
+
+  # DOCKER
+  dc-prod:
+    desc: Run prod compose
+    cmds:
+      - "docker compose --env-file {{.PROD_ENV_PATH}} -f {{.PROD_DC_PATH}} up --watch"
+
+  dc-prod-build:
+    desc: Build prod compose
+    cmds:
+      - "docker compose --env-file {{.PROD_ENV_PATH}} -f {{.PROD_DC_PATH}} up --build --watch"
+
+  dc-prod-down:
+    desc: Shutdown prod compose
+    cmds:
+      - "docker compose --env-file {{.PROD_ENV_PATH}} -f {{.PROD_DC_PATH}} down"
+
+  dc-prod-obs:
+    desc: Run prod compose with observe
+    cmds:
+      - "docker compose --env-file {{.PROD_ENV_PATH}} -f {{.PROD_DC_PATH}} --profile observe up --watch"
+
+  dc-prod-obs-down:
+    desc: Shutdown prod compose with observe containers
+    cmds:
+      - "docker compose --env-file {{.PROD_ENV_PATH}} -f {{.PROD_DC_PATH}} --profile observe down"
+
+  dc-dev:
+    desc: Run dev compose
+    cmds:
+      - "docker compose --env-file {{.DEV_ENV_PATH}} -f {{.DEV_DC_PATH}} up --watch"
+
+  dc-dev-build:
+    desc: Run dev compose
+    cmds:
+      - "docker compose --env-file {{.DEV_ENV_PATH}} -f {{.DEV_DC_PATH}} up --build --watch"
+
+  dc-dev-down:
+    desc: Shutdown dev compose
+    cmds:
+      - "docker compose --env-file {{.DEV_ENV_PATH}} -f {{.DEV_DC_PATH}} down"
+
+  dc-dev-obs:
+    desc: Run dev compose with observe
+    cmds:
+      - "docker compose --env-file {{.DEV_ENV_PATH}} -f {{.DEV_DC_PATH}} --profile observe up --watch"
+
+  dc-dev-obs-down:
+    desc: Shutdown dev compose with observe containers
+    cmds:
+      - "docker compose --env-file {{.DEV_ENV_PATH}} -f {{.DEV_DC_PATH}} --profile observe down"
+
+  dc-k6:
+    desc: Run k6 compose
+    cmds:
+      - "docker compose --env-file {{.K6_ENV_PATH}} -f {{.K6_DC_PATH}} --profile observe up"
+      - "task dc-k6-down"
+
+  dc-k6-build:
+    desc: Build k6 containers
+    cmds:
+      - "docker compose --env-file {{.K6_ENV_PATH}} -f {{.K6_DC_PATH}} build"
+
+  dc-k6-down:
+    desc: Shutdown k6 containers
+    cmds:
+      - "docker compose --env-file {{.K6_ENV_PATH}} -f {{.K6_DC_PATH}} --profile observe down -v"
+
+  # END
+
+  # K8s
+  k-up:
+    desc: Run k8s manifests
+    cmds:
+      - "kubectl apply -f build/k8s/cfg/cfg.yaml"
+      - "kubectl apply -f build/k8s/cfg/secret.yaml"
+      - "kubectl apply -f build/k8s/deploy.yaml"
+
+  k-down:
+    desc: Remove k8s manifests
+    cmds:
+      - "kubectl delete -f build/k8s/cfg/cfg.yaml"
+      - "kubectl delete -f build/k8s/cfg/secret.yaml"
+      - "kubectl delete -f build/k8s/deploy.yaml"
+  # END
+
+  # TESTS
+  t:
+    desc: Run tests
+    cmds:
+      - "task t-hdl"
+      - "task t-ctrl"
+      - "task t-repo"
+      - "task t-integration"
+
+  t-hdl:
+    desc: Test handlers
+    cmds:
+      - "task t-http"
+      - "task t-grpc"
+
+  t-http:
+    desc: Test http handlers
+    cmds:
+      - "go test ./internal/hdl/http -v"
+      - "go test -coverprofile=cov_http.out ./internal/hdl/http && go tool cover -func=cov_http.out"
+
+  t-grpc:
+    desc: Test grpc handlers
+    cmds:
+      - "go test ./internal/hdl/grpc -v"
+      - "go test -coverprofile=cov_grpc.out ./internal/hdl/grpc && go tool cover -func=cov_grpc.out"
+
+  t-ctrl:
+    desc: Run ctrl tests
+    cmds:
+      - "go test ./internal/ctrl -v"
+      - "go test -coverprofile=cov_ctrl.out ./internal/ctrl && go tool cover -func=cov_ctrl.out"
+
+  t-repo:
+    desc: Run repo tests
+    cmds:
+      - "go test ./internal/repo/db -v"
+      - "go test -coverprofile=cov_repo.out ./internal/repo/db && go tool cover -func=cov_repo.out"
+
+  t-integration:
+    desc: Run integration tests
+    cmds:
+      - "go test ./tests/integration/... -v"
+  # END

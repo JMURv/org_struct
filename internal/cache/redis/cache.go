@@ -1,0 +1,152 @@
+package redis
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/JMURv/golang-clean-template/internal/cache"
+	"github.com/JMURv/golang-clean-template/internal/config"
+	"github.com/go-redis/redis/v8"
+	"github.com/goccy/go-json"
+	ot "github.com/opentracing/opentracing-go"
+	"go.uber.org/zap"
+)
+
+type Cache struct {
+	cli *redis.Client
+}
+
+func New(conf config.Config) *Cache {
+	cli := redis.NewClient(
+		&redis.Options{
+			Addr:     conf.Redis.Addr,
+			Password: conf.Redis.Pass,
+			DB:       0,
+		},
+	)
+
+	_, err := cli.Ping(context.Background()).Result()
+	if err != nil {
+		zap.L().Fatal("Failed to connect to Redis", zap.Error(err))
+	}
+
+	return &Cache{cli: cli}
+}
+
+func (c *Cache) Close(ctx context.Context) error {
+	done := make(chan error, 1)
+	go func() {
+		done <- c.cli.Close()
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-done:
+		return err
+	}
+}
+
+func (c *Cache) GetToStruct(ctx context.Context, key string, dest any) error {
+	const op = "cache.GetToStruct"
+	span, ctx := ot.StartSpanFromContext(ctx, op)
+	defer span.Finish()
+
+	val, err := c.cli.Get(ctx, key).Bytes()
+	if errors.Is(err, redis.Nil) {
+		zap.L().Info(
+			"[CACHE] --> MISS",
+			zap.String("op", op), zap.String("key", key),
+		)
+		return cache.ErrNotFoundInCache
+	} else if err != nil {
+		span.SetTag(config.ErrorSpanTag, true)
+		zap.L().Error(
+			"[CACHE] --> ERROR",
+			zap.String("op", op), zap.String("key", key),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	if err = json.Unmarshal(val, dest); err != nil {
+		span.SetTag(config.ErrorSpanTag, true)
+		zap.L().Error(
+			"failed to unmarshal",
+			zap.String("op", op),
+			zap.String("key", key), zap.Any("dest", dest),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	zap.L().Info("[CACHE] --> HIT", zap.String("key", key))
+
+	return nil
+}
+
+func (c *Cache) Set(ctx context.Context, t time.Duration, key string, val any) {
+	const op = "cache.Set"
+	span, ctx := ot.StartSpanFromContext(ctx, op)
+	defer span.Finish()
+
+	if err := c.cli.Set(ctx, key, val, t).Err(); err != nil {
+		span.SetTag(config.ErrorSpanTag, true)
+		zap.L().Error(
+			"[CACHE] --> ERROR",
+			zap.String("op", op),
+			zap.String("t", t.String()), zap.String("key", key), zap.Any("val", val),
+			zap.Error(err),
+		)
+		return
+	}
+
+	zap.L().Info("[CACHE] --> SET", zap.String("key", key))
+	return
+}
+
+func (c *Cache) Delete(ctx context.Context, key string) {
+	const op = "cache.Delete"
+	span, ctx := ot.StartSpanFromContext(ctx, op)
+	defer span.Finish()
+
+	if err := c.cli.Del(ctx, key).Err(); err != nil {
+		span.SetTag(config.ErrorSpanTag, true)
+		zap.L().Error(
+			"[CACHE] --> ERROR",
+			zap.String("op", op),
+			zap.String("key", key),
+			zap.Error(err),
+		)
+		return
+	}
+	zap.L().Info("[CACHE] --> DELETE", zap.String("key", key))
+	return
+}
+
+func (c *Cache) InvalidateKeysByPattern(ctx context.Context, pattern string) {
+	ctx = context.Background()
+	var cursor uint64
+	for {
+		var err error
+		var keys []string
+
+		keys, cursor, err = c.cli.Scan(ctx, cursor, pattern, 100).Result() // 100 keys at a time
+		if err != nil {
+			zap.L().Error("failed to scan redis", zap.Error(err))
+			break
+		}
+
+		if len(keys) > 0 {
+			if err = c.cli.Del(ctx, keys...).Err(); err != nil {
+				zap.L().Error("failed to delete keys", zap.Error(err))
+				break
+			}
+		}
+
+		if cursor == 0 {
+			break
+		}
+	}
+}

@@ -1,0 +1,101 @@
+package main
+
+import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/JMURv/golang-clean-template/internal/auth"
+	"github.com/JMURv/golang-clean-template/internal/cache/redis"
+	"github.com/JMURv/golang-clean-template/internal/config"
+	"github.com/JMURv/golang-clean-template/internal/ctrl"
+	"github.com/JMURv/golang-clean-template/internal/hdl/grpc"
+	"github.com/JMURv/golang-clean-template/internal/hdl/http"
+	"github.com/JMURv/golang-clean-template/internal/observability/metrics/prometheus"
+	"github.com/JMURv/golang-clean-template/internal/observability/tracing/jaeger"
+	"github.com/JMURv/golang-clean-template/internal/repo/db"
+	"github.com/JMURv/golang-clean-template/internal/repo/s3"
+	"github.com/JMURv/golang-clean-template/internal/smtp"
+	"go.uber.org/zap"
+)
+
+const cancelTimeout = 10 * time.Second
+
+func mustRegisterLogger(mode, level string) {
+	var cfg zap.Config
+
+	switch mode {
+	case "prod":
+		cfg = zap.NewProductionConfig()
+	case "dev":
+		cfg = zap.NewDevelopmentConfig()
+	default:
+		panic("unknown mode: " + mode)
+	}
+
+	lvl := zap.NewAtomicLevel()
+	if err := lvl.UnmarshalText([]byte(level)); err != nil {
+		panic("invalid log level: " + level)
+	}
+
+	cfg.Level = lvl
+	zap.ReplaceGlobals(zap.Must(cfg.Build()))
+}
+
+func main() {
+	defer func() {
+		if err := recover(); err != nil {
+			zap.L().Panic("panic occurred", zap.Any("error", err))
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	conf := config.MustLoad()
+	mustRegisterLogger(conf.Mode, conf.LogLvl)
+
+	prom := prometheus.New(conf.Server.PromPort)
+	go prom.Start()
+	go jaeger.Start(ctx, conf.ServiceName, conf)
+
+	au := auth.New(conf)
+	cache := redis.New(conf)
+	repo := db.New(conf)
+	svc := ctrl.New(au, repo, cache, s3.New(conf), smtp.New(conf))
+	h := http.New(au, svc)
+	hg := grpc.New(conf.ServiceName, svc, au)
+
+	go h.Start(conf.Server.Port)
+	go hg.Start(conf.Server.GRPCPort)
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	<-c
+
+	zap.L().Info("Shutting down gracefully...")
+	sdCtx, sdCancel := context.WithTimeout(ctx, cancelTimeout)
+	defer sdCancel()
+
+	if err := h.Close(sdCtx); err != nil {
+		zap.L().Warn("Error closing handler", zap.Error(err))
+	}
+
+	if err := hg.Close(sdCtx); err != nil {
+		zap.L().Warn("Error closing grpc handler", zap.Error(err))
+	}
+
+	if err := cache.Close(sdCtx); err != nil {
+		zap.L().Warn("Failed to close connection to cache", zap.Error(err))
+	}
+
+	if err := repo.Close(sdCtx); err != nil {
+		zap.L().Warn("Error closing repository", zap.Error(err))
+	}
+
+	if err := prom.Close(sdCtx); err != nil {
+		zap.L().Warn("Error closing prometheus", zap.Error(err))
+	}
+}

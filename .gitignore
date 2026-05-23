@@ -1,0 +1,27 @@
+# common
+*~
+*.out
+.idea
+!.gitkeep
+tmp
+
+# build
+bin/*
+!bin/.gitkeep
+
+# configs
+.env*
+!.env.example
+!.env.integration
+!.env.k6
+
+# k8s
+cfg.yaml
+!cfg.example.yaml
+
+secret.yaml
+!secret.example.yaml
+
+# observe
+!loki-config.yaml
+!promtail-config.yaml
