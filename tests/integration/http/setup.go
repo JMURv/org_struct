@@ -11,14 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/JMURv/golang-clean-template/internal/auth"
-	"github.com/JMURv/golang-clean-template/internal/cache/redis"
 	"github.com/JMURv/golang-clean-template/internal/config"
 	"github.com/JMURv/golang-clean-template/internal/ctrl"
 	hdl "github.com/JMURv/golang-clean-template/internal/hdl/http"
 	"github.com/JMURv/golang-clean-template/internal/repo/db"
-	"github.com/JMURv/golang-clean-template/internal/repo/s3"
-	"github.com/JMURv/golang-clean-template/internal/smtp"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
 	"github.com/jackc/pgx/v5"
@@ -242,9 +238,7 @@ func init() {
 		),
 	)
 
-	_ = os.Setenv("MIGRATIONS_PATH", filepath.ToSlash(
-		filepath.Join(rootDir, "internal", "repo", "db", "migration"),
-	))
+	_ = os.Setenv("MIGRATIONS_PATH", filepath.ToSlash(filepath.Join(rootDir, "migrations")))
 
 	wg := &sync.WaitGroup{}
 	wg.Add(3)

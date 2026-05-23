@@ -2,44 +2,56 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/JMURv/golang-clean-template/internal/config"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
-	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/jmoiron/sqlx"
+	"github.com/pressly/goose/v3"
 	"go.uber.org/zap"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 type Repository struct {
-	conn *sqlx.DB
+	conn *gorm.DB
 }
 
-func New(config config.Config) *Repository {
-	conn, err := sqlx.Open(
-		"pgx", fmt.Sprintf(
-			"postgres://%s:%s@%s:%d/%s?sslmode=disable",
-			config.DB.User,
-			config.DB.Password,
-			config.DB.Host,
-			config.DB.Port,
-			config.DB.Database,
-		),
+func New(conf config.Config) *Repository {
+	dsn := fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		conf.DB.Host,
+		conf.DB.Port,
+		conf.DB.User,
+		conf.DB.Password,
+		conf.DB.Database,
 	)
+
+	conn, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		zap.L().Fatal("failed to connect to the database", zap.Error(err))
+		zap.L().Fatal("failed to connect to database", zap.Error(err))
 	}
 
-	if err = conn.Ping(); err != nil {
-		zap.L().Fatal("failed to ping the database", zap.Error(err))
+	sqlDB, err := conn.DB()
+	if err != nil {
+		zap.L().Fatal("failed to get sql.DB", zap.Error(err))
 	}
 
-	if err = applyMigrations(conn.DB, config); err != nil {
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(25)
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
+
+	if err = sqlDB.Ping(); err != nil {
+		zap.L().Fatal("failed to ping database", zap.Error(err))
+	}
+
+	if err = applyMigrations(sqlDB); err != nil {
 		zap.L().Fatal("failed to apply migrations", zap.Error(err))
 	}
 
-	mustPrecreate(config, conn.DB)
-	return &Repository{conn: conn}
+	return &Repository{
+		conn: conn,
+	}
 }
 
 func (r *Repository) Close(ctx context.Context) error {
@@ -54,4 +66,18 @@ func (r *Repository) Close(ctx context.Context) error {
 	case err := <-done:
 		return err
 	}
+}
+
+func applyMigrations(db *sql.DB) error {
+	goose.SetDialect("postgres")
+
+	path := "migrations"
+
+	if err := goose.Up(db, path); err != nil {
+		return err
+	}
+
+	zap.L().Info("migrations applied")
+
+	return nil
 }

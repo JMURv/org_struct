@@ -7,57 +7,48 @@ import (
 	"net/http"
 	"time"
 
-	_ "github.com/JMURv/golang-clean-template/api/rest/v1"
-	"github.com/JMURv/golang-clean-template/internal/auth"
+	// _ "github.com/JMURv/golang-clean-template/api/rest/v1"
 	"github.com/JMURv/golang-clean-template/internal/ctrl"
 	mid "github.com/JMURv/golang-clean-template/internal/hdl/http/middleware"
 	"github.com/JMURv/golang-clean-template/internal/hdl/http/utils"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"go.uber.org/zap"
 )
 
 type Handler struct {
-	Router *chi.Mux
-	au     auth.Core
-	srv    *http.Server
-	ctrl   ctrl.AppCtrl
+	mux  *http.ServeMux
+	srv  *http.Server
+	ctrl ctrl.AppCtrl
 }
 
-func New(au auth.Core, ctrl ctrl.AppCtrl) *Handler {
-	r := chi.NewRouter()
-	r.Use(
-		mid.Logger(zap.L()),
-		middleware.StripSlashes,
-		middleware.RequestID,
-		middleware.RealIP,
-		middleware.Recoverer,
-		mid.Prometheus,
-		mid.OT,
-	)
+func New(ctrl ctrl.AppCtrl) *Handler {
+	mux := http.NewServeMux()
 
-	hdl := &Handler{
-		Router: r,
-		au:     au,
-		ctrl:   ctrl,
-	}
+	hdl := &Handler{mux: mux, ctrl: ctrl}
+	hdl.registerDepartmentRoutes()
+	hdl.mux.Handle("/swagger/", httpSwagger.WrapHandler)
+	hdl.mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
 
-	hdl.RegisterAuthRoutes()
-	hdl.RegisterUserRoutes()
-	hdl.RegisterDeviceRoutes()
-	r.Get("/swagger/*", httpSwagger.WrapHandler)
-	r.Get(
-		"/health", func(w http.ResponseWriter, r *http.Request) {
-			utils.SuccessResponse(w, http.StatusOK, "OK")
-		},
-	)
+		utils.SuccessResponse(w, http.StatusOK, "OK")
+	})
+
+	var handler http.Handler = mux
+	handler = mid.OT(handler)
+	handler = mid.Prometheus(handler)
+	handler = mid.StripSlashes(handler)
+	handler = mid.Logger(zap.L())(handler)
+	hdl.mux = http.NewServeMux()
+	hdl.mux.Handle("/", handler)
 	return hdl
 }
 
 func (h *Handler) Start(port int) {
 	h.srv = &http.Server{
-		Handler:      h.Router,
+		Handler:      h.mux,
 		Addr:         fmt.Sprintf(":%v", port),
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,

@@ -1,107 +1,24 @@
 package middleware
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/JMURv/golang-clean-template/internal/auth"
-	"github.com/JMURv/golang-clean-template/internal/config"
-	"github.com/JMURv/golang-clean-template/internal/hdl/http/utils"
 	metrics "github.com/JMURv/golang-clean-template/internal/observability/metrics/prometheus"
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/opentracing/opentracing-go"
 	"go.uber.org/zap"
 )
 
-type AuthOpts struct {
-	CheckAuthor bool
-}
+func StripSlashes(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			r.URL.Path = strings.TrimSuffix(r.URL.Path, "/")
+		}
 
-func Auth(au auth.Core, opts AuthOpts) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(
-			func(w http.ResponseWriter, r *http.Request) {
-				access, err := r.Cookie(config.AccessCookieName)
-				if err != nil {
-					if errors.Is(err, http.ErrNoCookie) {
-						utils.ErrResponse(w, http.StatusUnauthorized, err)
-						return
-					} else {
-						zap.L().Error("failed to get access cookie", zap.Error(err))
-						utils.ErrResponse(w, http.StatusInternalServerError, err)
-						return
-					}
-				}
-
-				claims, err := au.ParseClaims(r.Context(), access.Value)
-				if err != nil {
-					utils.ErrResponse(w, http.StatusForbidden, err)
-					return
-				}
-
-				if opts.CheckAuthor {
-					uid, err := uuid.Parse(chi.URLParam(r, "id"))
-					if err != nil {
-						zap.L().Error("failed to get path variable", zap.Error(err))
-						utils.ErrResponse(w, http.StatusInternalServerError, err)
-						return
-					}
-
-					if uid != claims.UID {
-						utils.ErrResponse(w, http.StatusForbidden, err)
-						return
-					}
-				}
-
-				ctx := context.WithValue(r.Context(), config.UidKey, claims.UID)
-				next.ServeHTTP(w, r.WithContext(ctx))
-			},
-		)
-	}
-}
-
-var (
-	ErrIPIsIncorrect = errors.New("ip is incorrect")
-	ErrUAIsIncorrect = errors.New("user agent is incorrect")
-)
-
-func Device(next http.Handler) http.Handler {
-	return http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
-			ip := r.RemoteAddr
-			if ip == "" {
-				utils.ErrResponse(w, http.StatusForbidden, ErrIPIsIncorrect)
-
-				return
-			}
-
-			ip = strings.Split(ip, ":")[0]
-
-			splitIP := strings.Split(ip, ".")
-			if len(splitIP) != 4 { //nolint:mnd
-				utils.ErrResponse(w, http.StatusForbidden, ErrIPIsIncorrect)
-
-				return
-			}
-
-			ua := r.UserAgent()
-			if ua == "" {
-				utils.ErrResponse(w, http.StatusForbidden, ErrUAIsIncorrect)
-
-				return
-			}
-
-			zap.L().Debug("device info", zap.String("ip", ip), zap.String("ua", ua))
-			ctx := context.WithValue(r.Context(), config.IpKey, ip)
-			ctx = context.WithValue(ctx, config.UaKey, ua)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		},
-	)
+		next.ServeHTTP(w, r)
+	})
 }
 
 type LoggingResponseWriter struct {
