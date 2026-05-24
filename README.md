@@ -1,3 +1,5 @@
+[![codecov](https://raw.githubusercontent.com/JMURv/org_struct/main/.github/badges/coverage.svg)]
+
 ## Configuration
 - Create your own `.env` based on `.env.example`:
 ```shell
