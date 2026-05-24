@@ -18,7 +18,13 @@ linters:
     - funlen
     - exhaustruct
     - dupword
+    - gochecknoinits
+
   settings:
+    tagliatelle:
+      case:
+        rules:
+          json: snake
     wsl_v5:
       allow-first-in-block: true
       allow-whole-block: false
@@ -28,8 +34,8 @@ linters:
     errcheck:
       check-type-assertions: true
       check-blank: true
-    gocyclo:
-      min-complexity: 11
+    cyclop:
+      max-complexity: 11
 
   exclusions:
     generated: lax

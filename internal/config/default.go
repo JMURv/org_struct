@@ -1,28 +1,15 @@
 package config
 
-import "time"
-
 type ctxKey string
 
 const (
-	UidKey ctxKey = "uid"
-	IpKey  ctxKey = "ip"
-	UaKey  ctxKey = "ua"
+	IDKey ctxKey = "id"
 )
 
 const (
-	DefaultPage      = 1
-	DefaultSize      = 40
-	DefaultCacheTime = time.Hour
-	MinCacheTime     = time.Minute * 5
-	MaxMemory        = 10 << 20 // 10 MB
+	MaxDepth = 5
 )
 
 const (
-	AccessCookieName     = "access"
-	RefreshCookieName    = "refresh"
-	AccessTokenDuration  = time.Minute * 30
-	RefreshTokenDuration = time.Hour * 24 * 7
+	ErrorSpanTag = "error"
 )
-
-const ErrorSpanTag = "error"

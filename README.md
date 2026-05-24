@@ -9,29 +9,6 @@ Specify **Docker Hub** `USERNAME`, `PASSWORD` and desired `IMAGE_NAME` secrets i
 This is required to build and push docker image.
 ### END
 
-## Tooling
-Install `swaggo`:
-```shell
-go install github.com/swaggo/swag/cmd/swag@latest
-```
-
----
-
-[Visit to install protoc](https://protobuf.dev/installation/)
-
-Then do:
-```shell
-go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-
-go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-```
-
----
-
-[Install golangci-lint](https://golangci-lint.run/docs/welcome/install/local/)
-
----
-
 ## Stack
 |          | Technology |
 |----------|------------|
@@ -134,20 +111,3 @@ Shutdown manifests:
 ```shell
 task k-down
 ```
-
-## Tests
-### Integration
-Run:
-```shell
-task t-integration
-```
-It will spin up all containers for integration testing automatically using `testcontainers`.
-
-### Load testing 
-Run:
-```shell
-task dc-k6
-```
-
-It will spin up all `prod` environment, including observation containers and starts k6 scenario.
-Grafana has prebuilt dashboard for k6.

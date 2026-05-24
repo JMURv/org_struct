@@ -3,11 +3,11 @@ SELECT 'up SQL query';
 
 CREATE TABLE IF NOT EXISTS department (
     id                BIGINT        PRIMARY KEY,
-    name              VARCHAR(200)  NOT NULL, -- TODO: add CHECK constraint here
+    name              VARCHAR(200)  NOT NULL CHECK (char_length(trim(name)) > 0),
     parent_id         BIGINT,
     created_at        TIMESTAMPTZ   DEFAULT NOW(),
 
-    CONSTRAINT fk_parent_department FOREIGN KEY (parent_id) REFERENCES department (parent_id),
+    CONSTRAINT fk_parent_department FOREIGN KEY (parent_id) REFERENCES department (id),
     CONSTRAINT departments_name_parent_unique UNIQUE(name, parent_id)
 );
 

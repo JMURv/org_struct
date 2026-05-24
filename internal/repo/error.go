@@ -3,6 +3,7 @@ package repo
 import "errors"
 
 var (
-	ErrNotFound      = errors.New("not found")
-	ErrAlreadyExists = errors.New("already exists")
+	ErrNotFound        = errors.New("not found")
+	ErrDepartmentCycle = errors.New("department cycle")
+	ErrInvalidMode     = errors.New("invalid mode")
 )

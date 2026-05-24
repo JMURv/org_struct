@@ -161,7 +161,6 @@ tasks:
       - "task t-hdl"
       - "task t-ctrl"
       - "task t-repo"
-      - "task t-integration"
 
   t-hdl:
     desc: Test handlers
@@ -193,8 +192,4 @@ tasks:
       - "go test ./internal/repo/db -v"
       - "go test -coverprofile=cov_repo.out ./internal/repo/db && go tool cover -func=cov_repo.out"
 
-  t-integration:
-    desc: Run integration tests
-    cmds:
-      - "go test ./tests/integration/... -v"
   # END

@@ -57,7 +57,14 @@ func New(conf config.Config) *Repository {
 func (r *Repository) Close(ctx context.Context) error {
 	done := make(chan error, 1)
 	go func() {
-		done <- r.conn.Close()
+		d, err := r.conn.DB()
+		if err != nil {
+			zap.L().Error("failed to get database obj", zap.Error(err))
+
+			done <- err
+		}
+
+		done <- d.Close()
 	}()
 
 	select {
@@ -69,15 +76,17 @@ func (r *Repository) Close(ctx context.Context) error {
 }
 
 func applyMigrations(db *sql.DB) error {
-	goose.SetDialect("postgres")
+	err := goose.SetDialect("postgres")
+	if err != nil {
+		zap.L().Error("failed to set postgres dialect", zap.Error(err))
+		return err
+	}
 
-	path := "migrations"
-
-	if err := goose.Up(db, path); err != nil {
+	err = goose.Up(db, "migrations")
+	if err != nil {
 		return err
 	}
 
 	zap.L().Info("migrations applied")
-
 	return nil
 }
