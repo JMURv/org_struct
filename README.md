@@ -1,4 +1,4 @@
-[![codecov](https://raw.githubusercontent.com/JMURv/org_struct/main/.github/badges/coverage.svg)]
+[![Go Coverage](https://github.com/JMURv/org_struct/wiki/coverage.svg)](https://raw.githack.com/wiki/JMURv/org_struct/coverage.html)
 
 ## Configuration
 - Create your own `.env` based on `.env.example`:
