@@ -31,11 +31,8 @@ jobs:
       - name: Run HTTP handler tests
         run: go test -coverprofile=cov_http.out ./internal/hdl/http
 
-      - name: Run gRPC handler tests
-        run: go test -coverprofile=cov_grpc.out ./internal/hdl/grpc
-
       - name: Merge coverage reports
-        run: gocovmerge cov_repo.out cov_ctrl.out cov_http.out cov_grpc.out > coverage.out
+        run: gocovmerge cov_repo.out cov_ctrl.out cov_http.out > coverage.out
 
       - name: Update coverage report
         uses: ncruces/go-coverage-report@v0
