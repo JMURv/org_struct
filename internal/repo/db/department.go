@@ -5,10 +5,10 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/JMURv/golang-clean-template/internal/config"
-	"github.com/JMURv/golang-clean-template/internal/dto"
-	md "github.com/JMURv/golang-clean-template/internal/models"
-	"github.com/JMURv/golang-clean-template/internal/repo"
+	"github.com/JMURv/org-struct/internal/config"
+	"github.com/JMURv/org-struct/internal/dto"
+	md "github.com/JMURv/org-struct/internal/models"
+	"github.com/JMURv/org-struct/internal/repo"
 	"github.com/opentracing/opentracing-go"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -40,9 +40,10 @@ func (r *Repository) CreateEmployee(
 
 	if err := r.conn.WithContext(ctx).
 		Model(&md.Department{}).
-		Select("count(*) > 0").
+		Select("1").
 		Where("id = ?", id).
-		Find(&exists).Error; err != nil {
+		Limit(1).
+		Scan(&exists).Error; err != nil {
 		zap.L().Error("error getting department count", zap.Error(err))
 		return nil, err
 	}

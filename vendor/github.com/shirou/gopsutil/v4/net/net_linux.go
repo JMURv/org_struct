@@ -69,9 +69,6 @@ func IOCountersByFileWithContext(_ context.Context, pernic bool, filename string
 		}
 
 		fields := strings.Fields(strings.TrimSpace(statsPart))
-		if len(fields) < 13 {
-			continue
-		}
 		bytesRecv, err := strconv.ParseUint(fields[0], 10, 64)
 		if err != nil {
 			return ret, err

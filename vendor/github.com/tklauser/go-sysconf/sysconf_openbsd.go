@@ -257,10 +257,7 @@ func sysconf(name int) (int64, error) {
 		}
 		return -1, nil
 	case SC_PHYS_PAGES:
-		if mem := sysctl64("hw.physmem"); mem >= 0 {
-			return mem / int64(unix.Getpagesize()), nil
-		}
-		return -1, nil
+		return sysctl64("hw.physmem") / int64(unix.Getpagesize()), nil
 	case SC_NPROCESSORS_CONF:
 		return sysctl32("hw.ncpu"), nil
 	case SC_NPROCESSORS_ONLN:

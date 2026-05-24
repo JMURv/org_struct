@@ -1,7 +1,7 @@
 version: 3
 
 vars:
-  PROJECT_NAME: "app-template"
+  PROJECT_NAME: "org-struct"
   DEV_ENV_PATH: "build/configs/envs/.env.dev"
   DEV_DC_PATH: "compose-dev.yaml"
 

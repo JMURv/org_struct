@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/JMURv/golang-clean-template/internal/hdl"
-	"github.com/JMURv/golang-clean-template/internal/hdl/validation"
+	"github.com/JMURv/org-struct/internal/hdl"
+	"github.com/JMURv/org-struct/internal/hdl/validation"
 	"github.com/go-playground/validator/v10"
 	"github.com/goccy/go-json"
 	"go.uber.org/zap"

@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/JMURv/golang-clean-template/internal/dto"
-	md "github.com/JMURv/golang-clean-template/internal/models"
-	"github.com/JMURv/golang-clean-template/internal/repo"
+	"github.com/JMURv/org-struct/internal/dto"
+	md "github.com/JMURv/org-struct/internal/models"
+	"github.com/JMURv/org-struct/internal/repo"
 	"github.com/opentracing/opentracing-go"
 )
 

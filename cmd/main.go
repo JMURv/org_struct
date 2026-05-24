@@ -7,12 +7,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/JMURv/golang-clean-template/internal/config"
-	"github.com/JMURv/golang-clean-template/internal/ctrl"
-	"github.com/JMURv/golang-clean-template/internal/hdl/http"
-	"github.com/JMURv/golang-clean-template/internal/observability/metrics/prometheus"
-	"github.com/JMURv/golang-clean-template/internal/observability/tracing/jaeger"
-	"github.com/JMURv/golang-clean-template/internal/repo/db"
+	"github.com/JMURv/org-struct/internal/config"
+	"github.com/JMURv/org-struct/internal/ctrl"
+	"github.com/JMURv/org-struct/internal/hdl/http"
+	"github.com/JMURv/org-struct/internal/observability/metrics/prometheus"
+	"github.com/JMURv/org-struct/internal/observability/tracing/jaeger"
+	"github.com/JMURv/org-struct/internal/repo/db"
 	"go.uber.org/zap"
 )
 

@@ -2,29 +2,29 @@ apiVersion: apps/v1
 kind: Deployment
 
 metadata:
-  name: app-template
+  name: org-struct
   labels:
-    app: app-template
+    app: org-struct
 
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: app-template
+      app: org-struct
   template:
     metadata:
       labels:
-        app: app-template
+        app: org-struct
     spec:
       containers:
         - name: app
-          image: app-template-backend:latest
+          image: orgstruct:latest
 
           envFrom:
             - configMapRef:
-                name: app-template-cfg
+                name: org-struct-cfg
             - secretRef:
-                name: app-template-secret
+                name: org-struct-secret
 
           ports:
             - name: http
@@ -55,13 +55,13 @@ apiVersion: v1
 kind: Service
 
 metadata:
-  name: app-template
+  name: org-struct
   labels:
-    app: app-template
+    app: org-struct
 
 spec:
   selector:
-    app: app-template
+    app: org-struct
   ports:
     - name: http
       port: 8080

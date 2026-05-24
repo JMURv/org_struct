@@ -3,7 +3,7 @@ package dto
 import (
 	"time"
 
-	"github.com/JMURv/golang-clean-template/internal/models"
+	"github.com/JMURv/org-struct/internal/models"
 )
 
 type CreateDepartmentRequest struct {

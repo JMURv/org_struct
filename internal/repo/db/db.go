@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/JMURv/golang-clean-template/internal/config"
+	"github.com/JMURv/org-struct/internal/config"
 	"github.com/pressly/goose/v3"
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"

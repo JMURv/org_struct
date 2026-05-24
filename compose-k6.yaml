@@ -1,25 +1,11 @@
-name: app-template-k6
+name: org-struct-k6
 services:
-  redis:
-    extends:
-      service: redis
-      file: compose.yaml
-    volumes: !reset []
-    networks: !override [ app-template-k6 ]
-
-  minio:
-    extends:
-      service: minio
-      file: compose.yaml
-    volumes: !reset []
-    networks: !override [ app-template-k6 ]
-
   db:
     extends:
       service: db
       file: compose.yaml
     volumes: !reset []
-    networks: !override [ app-template-k6 ]
+    networks: !override [ org-struct-k6 ]
     command: postgres -c "max_connections=50000"
 
   backend:
@@ -28,7 +14,7 @@ services:
       file: compose.yaml
     env_file: !override
       - ./build/configs/envs/.env.k6
-    networks: !override [ app-template-k6 ]
+    networks: !override [ org-struct-k6 ]
 
   k6:
     container_name: k6
@@ -44,13 +30,13 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    networks: [ app-template-k6 ]
+    networks: [ org-struct-k6 ]
 
   jaeger:
     extends:
       service: jaeger
       file: compose.yaml
-    networks: !override [ app-template-k6 ]
+    networks: !override [ org-struct-k6 ]
 
   prometheus:
     extends:
@@ -58,13 +44,13 @@ services:
       file: compose.yaml
     volumes: !override
       - ./build/configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-    networks: !override [ app-template-k6 ]
+    networks: !override [ org-struct-k6 ]
 
   node-exp:
     extends:
       service: node-exp
       file: compose.yaml
-    networks: !override [ app-template-k6 ]
+    networks: !override [ org-struct-k6 ]
 
   grafana:
     extends:
@@ -72,7 +58,7 @@ services:
       file: compose.yaml
     volumes: !override
       - ./build/configs/grafana/provisioning:/etc/grafana/provisioning:ro
-    networks: !override [ app-template-k6 ]
+    networks: !override [ org-struct-k6 ]
 
   loki:
     extends:
@@ -80,26 +66,26 @@ services:
       file: compose.yaml
     volumes: !override
       - ./build/configs/loki:/etc/loki
-    networks: !override [ app-template-k6 ]
+    networks: !override [ org-struct-k6 ]
 
   promtail:
     extends:
       service: promtail
       file: compose.yaml
-    networks: !override [ app-template-k6 ]
+    networks: !override [ org-struct-k6 ]
 
   postgres-exporter:
     extends:
       service: postgres-exporter
       file: compose.yaml
-    networks: !override [ app-template-k6 ]
+    networks: !override [ org-struct-k6 ]
 
   redis-exporter:
     extends:
       service: redis-exporter
       file: compose.yaml
-    networks: !override [ app-template-k6 ]
+    networks: !override [ org-struct-k6 ]
 
 networks:
-  app-template-k6:
-    name: app-template-k6
+  org-struct-k6:
+    name: org-struct-k6

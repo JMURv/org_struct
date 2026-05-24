@@ -1,7 +1,7 @@
 package validation
 
 import (
-	"github.com/JMURv/golang-clean-template/internal/dto"
+	"github.com/JMURv/org-struct/internal/dto"
 	"github.com/go-playground/validator/v10"
 	"go.uber.org/zap"
 )

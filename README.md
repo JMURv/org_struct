@@ -1,37 +1,9 @@
-### REMOVE ME
-
-Find and replace all `app-template` to your project's name.
-As well, do it for `github.com/JMURv/golang-clean-template`, that used in go backend.
-
-### GitHub Actions
-Specify **Docker Hub** `USERNAME`, `PASSWORD` and desired `IMAGE_NAME` secrets in GH Actions repo.
-
-This is required to build and push docker image.
-### END
-
-## Stack
-|          | Technology |
-|----------|------------|
-| Backend  | Golang     |
-
----
 ## Configuration
-### App
-Configuration files for dev placed in `/build/configs/envs`
 - Create your own `.env` based on `.env.example`:
 ```shell
 cp build/configs/envs/.env.example build/configs/envs/.env.dev && \
 cp build/configs/envs/.env.example build/configs/envs/.env.prod
 ```
-
-## Build
-### Locally
-In root folder run:
-```shell
-go build -o bin/main ./cmd/main.go
-```
-After that, you can run app via `./bin/main`
-___
 
 ### Docker
 In the root folder run:
@@ -39,40 +11,9 @@ In the root folder run:
 task dc-dev-build
 ```
 
-or run:
-```shell
-task dc-prod-build
-```
-
-To build `dev` or `prod` containers respectively
-
-## Run
-### Locally
-```shell
-go run cmd/main.go
-```
-
-___
-
-### Docker Compose
-Run dev (requires `build/configs/envs/.env.dev`):
-```shell
-task dc-dev
-```
-
-Run dev with observation containers:
+Or run dev with observation containers:
 ```shell
 task dc-dev-obs
-```
-
-Run prod (requires `build/configs/envs/.env.prod`):
-```shell
-task dc-prod
-```
-
-Run prod with observation containers:
-```shell
-task dc-prod-obs
 ```
 
 Observe profile starts svcs like: `prometheus`, `jaeger`, `node-exporter`, `grafana` and etc.
@@ -91,6 +32,12 @@ Services are available at:
 | Grafana          | http://localhost:3000  |
 
 More information could be found inside `compose.yaml`.
+
+---
+
+### Tests
+
+Run `task t`
 
 ___
 

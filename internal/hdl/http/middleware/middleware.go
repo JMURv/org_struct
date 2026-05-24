@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	metrics "github.com/JMURv/golang-clean-template/internal/observability/metrics/prometheus"
+	metrics "github.com/JMURv/org-struct/internal/observability/metrics/prometheus"
 	"github.com/opentracing/opentracing-go"
 	"go.uber.org/zap"
 )

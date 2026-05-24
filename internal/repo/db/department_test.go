@@ -2,553 +2,266 @@ package db
 
 import (
 	"context"
-	"database/sql"
-	"errors"
-	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/JMURv/golang-clean-template/internal/dto"
-	md "github.com/JMURv/golang-clean-template/internal/models"
-	"github.com/JMURv/golang-clean-template/internal/repo"
-	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
-	"github.com/stretchr/testify/assert"
-	"regexp"
 	"testing"
 	"time"
+
+	"github.com/JMURv/org-struct/internal/dto"
+	md "github.com/JMURv/org-struct/internal/models"
+	"github.com/JMURv/org-struct/internal/repo"
+	"github.com/stretchr/testify/assert"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
+
+	"github.com/pressly/goose/v3"
+	gpg "gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-func TestRepository_ListDevices(t *testing.T) {
-	db, mock, err := sqlmock.New()
+func newTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+
+	ctx := context.Background()
+
+	pgContainer, err := postgres.Run(ctx,
+		"postgres:17.4-alpine",
+		postgres.WithDatabase("testdb"),
+		postgres.WithUsername("test"),
+		postgres.WithPassword("test"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("5432/tcp").
+				WithStartupTimeout(60*time.Second),
+		),
+	)
 	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer db.Close()
-
-	sqlxDB := sqlx.NewDb(db, "sqlmock")
-	repo := &Repository{conn: sqlxDB}
-
-	userID := uuid.New()
-	testDevices := []md.Device{
-		{
-			ID:         "device1",
-			Name:       "Test Device 1",
-			DeviceType: "mobile",
-			OS:         "Android",
-			Browser:    "Chrome",
-			IP:         "192.168.1.1",
-			UA:         "Mozilla/5.0",
-			LastActive: time.Now(),
-		},
-		{
-			ID:         "device2",
-			Name:       "Test Device 2",
-			DeviceType: "desktop",
-			OS:         "Windows",
-			Browser:    "Firefox",
-			IP:         "192.168.1.2",
-			UA:         "Mozilla/5.0",
-			LastActive: time.Now(),
-		},
+		t.Fatal(err)
 	}
 
-	tests := []struct {
-		name        string
-		userID      uuid.UUID
-		mock        func()
-		expected    []md.Device
-		expectedErr error
-	}{
-		{
-			name:   "SuccessWithDevices",
-			userID: userID,
-			mock: func() {
-				rows := sqlmock.NewRows([]string{"id", "name", "device_type", "os", "user_agent", "browser", "ip", "last_active"}).
-					AddRow(
-						testDevices[0].ID,
-						testDevices[0].Name,
-						testDevices[0].DeviceType,
-						testDevices[0].OS,
-						testDevices[0].UA,
-						testDevices[0].Browser,
-						testDevices[0].IP,
-						testDevices[0].LastActive,
-					).
-					AddRow(
-						testDevices[1].ID,
-						testDevices[1].Name,
-						testDevices[1].DeviceType,
-						testDevices[1].OS,
-						testDevices[1].UA,
-						testDevices[1].Browser,
-						testDevices[1].IP,
-						testDevices[1].LastActive,
-					)
-				mock.ExpectQuery(regexp.QuoteMeta(listDevices)).
-					WithArgs(userID).
-					WillReturnRows(rows)
-			},
-			expected:    testDevices,
-			expectedErr: nil,
-		},
-		{
-			name:   "SuccessNoDevices",
-			userID: userID,
-			mock: func() {
-				rows := sqlmock.NewRows([]string{"id", "name", "device_type", "os", "user_agent", "browser", "ip", "last_active"})
-				mock.ExpectQuery(regexp.QuoteMeta(listDevices)).
-					WithArgs(userID).
-					WillReturnRows(rows)
-			},
-			expected:    []md.Device{},
-			expectedErr: nil,
-		},
-		{
-			name:   "DatabaseError",
-			userID: userID,
-			mock: func() {
-				mock.ExpectQuery(regexp.QuoteMeta(listDevices)).
-					WithArgs(userID).
-					WillReturnError(errors.New("database error"))
-			},
-			expected:    nil,
-			expectedErr: errors.New("database error"),
-		},
+	t.Cleanup(func() {
+		_ = pgContainer.Terminate(ctx)
+	})
+
+	dsn, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.mock()
-
-			devices, err := repo.ListDevices(context.Background(), tt.userID)
-
-			if tt.expectedErr != nil {
-				assert.Error(t, err)
-				assert.EqualError(t, err, tt.expectedErr.Error())
-				assert.Nil(t, devices)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, devices)
-			}
-		})
+	db, err := gorm.Open(gpg.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	assert.NoError(t, mock.ExpectationsWereMet())
+	sqlDB, _ := db.DB()
+
+	err = goose.SetDialect("postgres")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = goose.Up(sqlDB, "../../../migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return db
 }
 
-func TestRepository_GetDevice(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer db.Close()
+func newTestRepo(t *testing.T) *Repository {
+	db := newTestDB(t)
 
-	sqlxDB := sqlx.NewDb(db, "sqlmock")
-	r := &Repository{conn: sqlxDB}
-
-	userID := uuid.New()
-	deviceID := "device123"
-	testDevice := md.Device{
-		ID:         deviceID,
-		Name:       "Test Device",
-		DeviceType: "mobile",
-		OS:         "Android",
-		Browser:    "Chrome",
-		IP:         "192.168.1.1",
-		UA:         "Mozilla/5.0",
-	}
-
-	tests := []struct {
-		name        string
-		userID      uuid.UUID
-		deviceID    string
-		mock        func()
-		expected    *md.Device
-		expectedErr error
-	}{
-		{
-			name:     "Success",
-			userID:   userID,
-			deviceID: deviceID,
-			mock: func() {
-				rows := sqlmock.NewRows([]string{"id", "name", "device_type", "os", "user_agent", "browser", "ip", "last_active"}).
-					AddRow(
-						testDevice.ID,
-						testDevice.Name,
-						testDevice.DeviceType,
-						testDevice.OS,
-						testDevice.UA,
-						testDevice.Browser,
-						testDevice.IP,
-						testDevice.LastActive,
-					)
-				mock.ExpectQuery(regexp.QuoteMeta(getDevice)).
-					WithArgs(deviceID, userID).
-					WillReturnRows(rows)
-			},
-			expected:    &testDevice,
-			expectedErr: nil,
-		},
-		{
-			name:     "NotFound",
-			userID:   userID,
-			deviceID: deviceID,
-			mock: func() {
-				mock.ExpectQuery(regexp.QuoteMeta(getDevice)).
-					WithArgs(deviceID, userID).
-					WillReturnError(sql.ErrNoRows)
-			},
-			expected:    nil,
-			expectedErr: repo.ErrNotFound,
-		},
-		{
-			name:     "DatabaseError",
-			userID:   userID,
-			deviceID: deviceID,
-			mock: func() {
-				mock.ExpectQuery(regexp.QuoteMeta(getDevice)).
-					WithArgs(deviceID, userID).
-					WillReturnError(errors.New("database error"))
-			},
-			expected:    nil,
-			expectedErr: errors.New("database error"),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.mock()
-
-			device, err := r.GetDevice(context.Background(), tt.userID, tt.deviceID)
-
-			if tt.expectedErr != nil {
-				assert.Error(t, err)
-				if errors.Is(tt.expectedErr, repo.ErrNotFound) {
-					assert.ErrorIs(t, err, repo.ErrNotFound)
-				} else {
-					assert.EqualError(t, err, tt.expectedErr.Error())
-				}
-				assert.Nil(t, device)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, device)
-			}
-		})
-	}
-
-	assert.NoError(t, mock.ExpectationsWereMet())
-}
-
-func TestRepository_GetDeviceByID(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer db.Close()
-
-	sqlxDB := sqlx.NewDb(db, "sqlmock")
-	r := &Repository{conn: sqlxDB}
-
-	deviceID := "device123"
-	testDevice := md.Device{
-		ID:         deviceID,
-		UserID:     uuid.New(),
-		Name:       "Test Device",
-		DeviceType: "mobile",
-		OS:         "Android",
-		Browser:    "Chrome",
-		IP:         "192.168.1.1",
-		UA:         "Mozilla/5.0",
-	}
-
-	tests := []struct {
-		name        string
-		deviceID    string
-		mock        func()
-		expected    *md.Device
-		expectedErr error
-	}{
-		{
-			name:     "Success",
-			deviceID: deviceID,
-			mock: func() {
-				rows := sqlmock.NewRows([]string{"id", "user_id", "name", "device_type", "os", "browser", "user_agent", "ip", "last_active"}).
-					AddRow(
-						testDevice.ID,
-						testDevice.UserID,
-						testDevice.Name,
-						testDevice.DeviceType,
-						testDevice.OS,
-						testDevice.Browser,
-						testDevice.UA,
-						testDevice.IP,
-						testDevice.LastActive,
-					)
-				mock.ExpectQuery(regexp.QuoteMeta(getDeviceByID)).
-					WithArgs(deviceID).
-					WillReturnRows(rows)
-			},
-			expected:    &testDevice,
-			expectedErr: nil,
-		},
-		{
-			name:     "NotFound",
-			deviceID: deviceID,
-			mock: func() {
-				mock.ExpectQuery(regexp.QuoteMeta(getDeviceByID)).
-					WithArgs(deviceID).
-					WillReturnError(sql.ErrNoRows)
-			},
-			expected:    nil,
-			expectedErr: repo.ErrNotFound,
-		},
-		{
-			name:     "DatabaseError",
-			deviceID: deviceID,
-			mock: func() {
-				mock.ExpectQuery(regexp.QuoteMeta(getDeviceByID)).
-					WithArgs(deviceID).
-					WillReturnError(errors.New("database error"))
-			},
-			expected:    nil,
-			expectedErr: errors.New("database error"),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.deviceID != "" {
-				tt.mock()
-			}
-
-			device, err := r.GetDeviceByID(context.Background(), tt.deviceID)
-
-			if tt.expectedErr != nil {
-				assert.Error(t, err)
-				if errors.Is(tt.expectedErr, repo.ErrNotFound) {
-					assert.ErrorIs(t, err, repo.ErrNotFound)
-				} else {
-					assert.EqualError(t, err, tt.expectedErr.Error())
-				}
-				assert.Nil(t, device)
-			} else {
-				assert.NoError(t, err)
-				if assert.NotNil(t, device) {
-					assert.Equal(t, tt.expected.ID, device.ID)
-					assert.Equal(t, tt.expected.UserID, device.UserID)
-					assert.Equal(t, tt.expected.Name, device.Name)
-				}
-			}
-		})
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("there were unfulfilled expectations: %s", err)
+	return &Repository{
+		conn: db,
 	}
 }
 
-func TestRepository_UpdateDevice(t *testing.T) {
-	db, mock, err := sqlmock.New()
+func seedDepartmentTree(t *testing.T, r *Repository) (root, child, grandchild md.Department) {
+	t.Helper()
+
+	root = md.Department{Name: "Root"}
+	if err := r.conn.Create(&root).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	child = md.Department{Name: "Child", ParentID: &root.ID}
+	if err := r.conn.Create(&child).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	grandchild = md.Department{Name: "GrandChild", ParentID: &child.ID}
+	if err := r.conn.Create(&grandchild).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	return
+}
+
+func TestRepository_CreateDepartment(t *testing.T) {
+	r := newTestRepo(t)
+
+	req := dto.CreateDepartmentRequest{
+		Name: " Backend ",
+	}
+
+	res, err := r.CreateDepartment(context.Background(), req)
 	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer db.Close()
-
-	sqlxDB := sqlx.NewDb(db, "sqlmock")
-	r := &Repository{conn: sqlxDB}
-
-	userID := uuid.New()
-	deviceID := "device123"
-	updateReq := &dto.UpdateDeviceRequest{Name: "Updated Device Name"}
-
-	tests := []struct {
-		name        string
-		userID      uuid.UUID
-		deviceID    string
-		req         *dto.UpdateDeviceRequest
-		mock        func()
-		expectedErr error
-	}{
-		{
-			name:     "Success",
-			userID:   userID,
-			deviceID: deviceID,
-			req:      updateReq,
-			mock: func() {
-				mock.ExpectExec(regexp.QuoteMeta(updateDevice)).
-					WithArgs(updateReq.Name, deviceID, userID).
-					WillReturnResult(sqlmock.NewResult(0, 1))
-			},
-			expectedErr: nil,
-		},
-		{
-			name:     "NoRowsAffected",
-			userID:   userID,
-			deviceID: deviceID,
-			req:      updateReq,
-			mock: func() {
-				mock.ExpectExec(regexp.QuoteMeta(updateDevice)).
-					WithArgs(updateReq.Name, deviceID, userID).
-					WillReturnResult(sqlmock.NewResult(0, 0))
-			},
-			expectedErr: repo.ErrNotFound,
-		},
-		{
-			name:     "DatabaseErrorOnExec",
-			userID:   userID,
-			deviceID: deviceID,
-			req:      updateReq,
-			mock: func() {
-				mock.ExpectExec(regexp.QuoteMeta(updateDevice)).
-					WithArgs(updateReq.Name, deviceID, userID).
-					WillReturnError(errors.New("database error"))
-			},
-			expectedErr: errors.New("database error"),
-		},
-		{
-			name:     "DatabaseErrorOnRowsAffected",
-			userID:   userID,
-			deviceID: deviceID,
-			req:      updateReq,
-			mock: func() {
-				result := sqlmock.NewErrorResult(errors.New("rows affected error"))
-				mock.ExpectExec(regexp.QuoteMeta(updateDevice)).
-					WithArgs(updateReq.Name, deviceID, userID).
-					WillReturnResult(result)
-			},
-			expectedErr: errors.New("rows affected error"),
-		},
+		t.Fatal(err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.deviceID != "" && tt.userID != uuid.Nil && tt.req != nil {
-				tt.mock()
-			}
-
-			err := r.UpdateDevice(context.Background(), tt.userID, tt.deviceID, tt.req)
-
-			if tt.expectedErr != nil {
-				assert.Error(t, err)
-				if errors.Is(tt.expectedErr, repo.ErrNotFound) {
-					assert.ErrorIs(t, err, repo.ErrNotFound)
-				} else {
-					assert.EqualError(t, err, tt.expectedErr.Error())
-				}
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("there were unfulfilled expectations: %s", err)
+	if res.Name != "Backend" {
+		t.Fatalf("expected trimmed name, got %s", res.Name)
 	}
 }
 
-func TestRepository_DeleteDevice(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer db.Close()
+func TestRepository_CreateEmployee(t *testing.T) {
+	r := newTestRepo(t)
 
-	sqlxDB := sqlx.NewDb(db, "sqlmock")
-	r := &Repository{conn: sqlxDB}
-
-	userID := uuid.New()
-	deviceID := "device123"
-
-	tests := []struct {
-		name        string
-		userID      uuid.UUID
-		deviceID    string
-		mock        func()
-		expectedErr error
-	}{
-		{
-			name:     "Success",
-			userID:   userID,
-			deviceID: deviceID,
-			mock: func() {
-				mock.ExpectExec(regexp.QuoteMeta(revokeTokenByDevice)).
-					WithArgs(userID, deviceID).
-					WillReturnResult(sqlmock.NewResult(1, 1))
-
-				mock.ExpectExec(regexp.QuoteMeta(deleteDevice)).
-					WithArgs(deviceID, userID).
-					WillReturnResult(sqlmock.NewResult(0, 1))
-			},
-			expectedErr: nil,
-		},
-		{
-			name:     "NoRowsAffected",
-			userID:   userID,
-			deviceID: deviceID,
-			mock: func() {
-				mock.ExpectExec(regexp.QuoteMeta(revokeTokenByDevice)).
-					WithArgs(userID, deviceID).
-					WillReturnResult(sqlmock.NewResult(1, 1))
-
-				mock.ExpectExec(regexp.QuoteMeta(deleteDevice)).
-					WithArgs(deviceID, userID).
-					WillReturnResult(sqlmock.NewResult(0, 0))
-			},
-			expectedErr: repo.ErrNotFound,
-		},
-		{
-			name:     "DatabaseErrorOnExec",
-			userID:   userID,
-			deviceID: deviceID,
-			mock: func() {
-				mock.ExpectExec(regexp.QuoteMeta(revokeTokenByDevice)).
-					WithArgs(userID, deviceID).
-					WillReturnResult(sqlmock.NewResult(1, 1))
-
-				mock.ExpectExec(regexp.QuoteMeta(deleteDevice)).
-					WithArgs(deviceID, userID).
-					WillReturnError(errors.New("database error"))
-			},
-			expectedErr: errors.New("database error"),
-		},
-		{
-			name:     "DatabaseErrorOnRowsAffected",
-			userID:   userID,
-			deviceID: deviceID,
-			mock: func() {
-				mock.ExpectExec(regexp.QuoteMeta(revokeTokenByDevice)).
-					WithArgs(userID, deviceID).
-					WillReturnResult(sqlmock.NewResult(1, 1))
-
-				result := sqlmock.NewErrorResult(errors.New("rows affected error"))
-				mock.ExpectExec(regexp.QuoteMeta(deleteDevice)).
-					WithArgs(deviceID, userID).
-					WillReturnResult(result)
-			},
-			expectedErr: errors.New("rows affected error"),
-		},
+	dept := md.Department{Name: "IT"}
+	if err := r.conn.Create(&dept).Error; err != nil {
+		t.Fatal(err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.deviceID != "" && tt.userID != uuid.Nil {
-				tt.mock()
-			}
+	t.Run("success", func(t *testing.T) {
+		req := dto.CreateDepartmentEmployeeRequest{
+			FullName: " John ",
+			Position: " Dev ",
+		}
 
-			err := r.DeleteDevice(context.Background(), tt.userID, tt.deviceID)
+		res, err := r.CreateEmployee(context.Background(), dept.ID, req)
 
-			if tt.expectedErr != nil {
-				assert.Error(t, err)
-				if errors.Is(tt.expectedErr, repo.ErrNotFound) {
-					assert.ErrorIs(t, err, repo.ErrNotFound)
-				} else {
-					assert.EqualError(t, err, tt.expectedErr.Error())
-				}
-			} else {
-				assert.NoError(t, err)
-			}
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Equal(t, "John", res.FullName)
+		assert.Equal(t, "Dev", res.Position)
+	})
+
+	t.Run("not_found", func(t *testing.T) {
+		_, err := r.CreateEmployee(context.Background(), 999999, dto.CreateDepartmentEmployeeRequest{})
+		assert.ErrorIs(t, err, repo.ErrNotFound)
+	})
+}
+
+func TestRepository_GetDepartment(t *testing.T) {
+	r := newTestRepo(t)
+
+	root, _, _ := seedDepartmentTree(t, r)
+
+	t.Run("not_found", func(t *testing.T) {
+		_, err := r.GetDepartment(context.Background(), 9999, dto.GetDepartmentQuery{})
+		assert.ErrorIs(t, err, repo.ErrNotFound)
+	})
+
+	t.Run("depth_0_only_root", func(t *testing.T) {
+		res, err := r.GetDepartment(context.Background(), root.ID, dto.GetDepartmentQuery{
+			Depth:            0,
+			IncludeEmployees: new(true),
 		})
-	}
 
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("there were unfulfilled expectations: %s", err)
+		assert.NoError(t, err)
+		assert.Equal(t, root.ID, res.ID)
+		assert.Len(t, res.Children, 0)
+	})
+
+	t.Run("depth_2_recursive", func(t *testing.T) {
+		b := true
+
+		res, err := r.GetDepartment(context.Background(), root.ID, dto.GetDepartmentQuery{
+			Depth:            2,
+			IncludeEmployees: &b,
+		})
+
+		assert.NoError(t, err)
+		assert.Len(t, res.Children, 1)
+		assert.Len(t, res.Children[0].Children, 1)
+	})
+}
+
+func TestRepository_UpdateDepartment(t *testing.T) {
+	r := newTestRepo(t)
+
+	a := md.Department{Name: "A"}
+	b := md.Department{Name: "B"}
+	c := md.Department{Name: "C"}
+
+	r.conn.Create(&a)
+	r.conn.Create(&b)
+	r.conn.Create(&c)
+
+	b.ParentID = &a.ID
+	c.ParentID = &b.ID
+	r.conn.Save(&b)
+	r.conn.Save(&c)
+
+	t.Run("rename", func(t *testing.T) {
+		newName := "A1"
+
+		res, err := r.UpdateDepartment(context.Background(), a.ID, dto.UpdateDepartmentRequest{
+			Name: &newName,
+		})
+
+		assert.NoError(t, err)
+		assert.Equal(t, "A1", res.Name)
+	})
+
+	t.Run("self_cycle", func(t *testing.T) {
+		_, err := r.UpdateDepartment(context.Background(), a.ID, dto.UpdateDepartmentRequest{
+			ParentID: &a.ID,
+		})
+
+		assert.ErrorIs(t, err, repo.ErrDepartmentCycle)
+	})
+
+	t.Run("deep_cycle_detected", func(t *testing.T) {
+		_, err := r.UpdateDepartment(context.Background(), a.ID, dto.UpdateDepartmentRequest{
+			ParentID: &c.ID,
+		})
+
+		assert.ErrorIs(t, err, repo.ErrDepartmentCycle)
+	})
+}
+
+func TestRepository_DeleteDepartment(t *testing.T) {
+	r := newTestRepo(t)
+
+	root, _, _ := seedDepartmentTree(t, r)
+
+	t.Run("cascade", func(t *testing.T) {
+		err := r.DeleteDepartment(context.Background(), root.ID, dto.DeleteDepartmentQuery{
+			Mode: "cascade",
+		})
+
+		assert.NoError(t, err)
+
+		var count int64
+		r.conn.Model(&md.Department{}).Count(&count)
+		assert.Equal(t, int64(0), count)
+	})
+
+	r = newTestRepo(t)
+	d1 := md.Department{Name: "D1"}
+	d2 := md.Department{Name: "D2"}
+	r.conn.Create(&d1)
+	r.conn.Create(&d2)
+
+	emp := md.Employee{
+		DepartmentID: d1.ID,
+		FullName:     "John",
+		Position:     "Dev",
 	}
+	r.conn.Create(&emp)
+
+	t.Run("reassign", func(t *testing.T) {
+		err := r.DeleteDepartment(context.Background(), d1.ID, dto.DeleteDepartmentQuery{
+			Mode:                   "reassign",
+			ReassignToDepartmentID: int(d2.ID),
+		})
+
+		assert.NoError(t, err)
+
+		var e md.Employee
+		r.conn.First(&e, emp.ID)
+
+		assert.Equal(t, d2.ID, e.DepartmentID)
+	})
 }

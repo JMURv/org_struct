@@ -7,13 +7,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/JMURv/golang-clean-template/internal/config"
-	"github.com/JMURv/golang-clean-template/internal/ctrl"
-	"github.com/JMURv/golang-clean-template/internal/dto"
-	"github.com/JMURv/golang-clean-template/internal/hdl"
-	"github.com/JMURv/golang-clean-template/internal/hdl/http/utils"
-	"github.com/JMURv/golang-clean-template/internal/hdl/validation"
-	_ "github.com/JMURv/golang-clean-template/internal/models"
+	"github.com/JMURv/org-struct/internal/config"
+	"github.com/JMURv/org-struct/internal/ctrl"
+	"github.com/JMURv/org-struct/internal/dto"
+	"github.com/JMURv/org-struct/internal/hdl"
+	"github.com/JMURv/org-struct/internal/hdl/http/utils"
+	"github.com/JMURv/org-struct/internal/hdl/validation"
+	_ "github.com/JMURv/org-struct/internal/models"
 	"go.uber.org/zap"
 )
 
@@ -236,16 +236,16 @@ func (h *Handler) deleteDepartment(w http.ResponseWriter, r *http.Request) {
 
 	req := dto.DeleteDepartmentQuery{}
 	req.Mode = r.URL.Query().Get("mode")
-
-	reasIDStr := r.URL.Query().Get("reassign_to_department_id")
-
-	reasID, err := strconv.ParseInt(reasIDStr, 10, 64)
-	if err != nil {
-		utils.ErrResponse(w, http.StatusBadRequest, err)
-		return
+	if req.Mode != "cascade" {
+		reasIDStr := r.URL.Query().Get("reassign_to_department_id")
+		reasID, err := strconv.ParseInt(reasIDStr, 10, 64)
+		if err != nil {
+			utils.ErrResponse(w, http.StatusBadRequest, err)
+			return
+		}
+		req.ReassignToDepartmentID = int(reasID)
 	}
 
-	req.ReassignToDepartmentID = int(reasID)
 	if err = validation.V.Struct(&req); err != nil {
 		zap.L().Debug("failed to validate request", zap.Error(err))
 		utils.ErrResponse(w, http.StatusBadRequest, err)

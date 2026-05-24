@@ -195,10 +195,7 @@ func sysconf(name int) (int64, error) {
 
 	// Linux/Solaris
 	case SC_PHYS_PAGES:
-		if mem := sysctl64("hw.physmem64"); mem >= 0 {
-			return mem / int64(unix.Getpagesize()), nil
-		}
-		return -1, nil
+		return sysctl64("hw.physmem64") / int64(unix.Getpagesize()), nil
 
 	// Native
 	case SC_SCHED_RT_TS:

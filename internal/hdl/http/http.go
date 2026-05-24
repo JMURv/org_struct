@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"time"
 
-	// _ "github.com/JMURv/golang-clean-template/api/rest/v1"
-	"github.com/JMURv/golang-clean-template/internal/ctrl"
-	mid "github.com/JMURv/golang-clean-template/internal/hdl/http/middleware"
-	"github.com/JMURv/golang-clean-template/internal/hdl/http/utils"
+	// _ "github.com/JMURv/org-struct/api/rest/v1"
+	"github.com/JMURv/org-struct/internal/ctrl"
+	mid "github.com/JMURv/org-struct/internal/hdl/http/middleware"
+	"github.com/JMURv/org-struct/internal/hdl/http/utils"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"go.uber.org/zap"
 )
